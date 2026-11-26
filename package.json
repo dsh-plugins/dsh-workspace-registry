@@ -32,6 +32,15 @@
     "@deepseek-ai/cordis": "4.2.0-alpha.1"
   },
   "scripts": {
-    "build": "tsc -b"
+    "build": "tsc -b tsconfig.release.json",
+    "test": "node --test dist/registry.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dsh-plugins/dsh-workspace-registry.git"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "typescript": "6.0.3"
   }
 }
