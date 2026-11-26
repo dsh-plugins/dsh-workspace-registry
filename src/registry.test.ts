@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
+import { messages } from './messages.js'
 import { apply, ProjectRegistry, type ProjectEntry } from './index.js'
 
 function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
@@ -29,7 +30,7 @@ test('query exposes permitted metadata and strips private routing, ACL and crede
   assert.deepEqual(registry.query('alice', 'private'), [])
   assert.deepEqual(registry.query('nobody'), [])
   for (const id of ['private', 'missing']) {
-    assert.throws(() => registry.resolve('alice', id), { message: '项目不可用' })
+    assert.throws(() => registry.resolve('alice', id), { message: messages.unavailable })
   }
   assert.equal(registry.resolve('alice', 'mobile').workspace, '/srv/projects/mobile')
 })

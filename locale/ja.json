@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "title": "プロジェクトメタデータレジストリ",
+    "description": "プロジェクトの技術、ノード、ツール権限を索引化し、ホストで許可されたワークスペースを特定します。"
+  },
+  "messages": {
+    "fieldText": "索引の {field} には空でないテキストが必要です",
+    "invalidField": "索引の {field} の形式が無効です",
+    "fieldArray": "索引の {field} は配列で指定してください",
+    "remote": "gitRemote にはネットワーク上の Git リモートを指定してください",
+    "entry": "索引項目はオブジェクトで指定してください",
+    "absolute": "workspace にはノード上の絶対パスを指定してください",
+    "wildcard": "すべての利用者を許可するには principals を文字列 \"*\" にしてください",
+    "entries": "プロジェクト索引は配列で指定してください",
+    "duplicate": "プロジェクト ID が重複しています：{id}",
+    "unavailable": "プロジェクトを利用できません",
+    "source": "索引のソースは projects と catalogFile のどちらか一方を指定してください"
+  }
+}

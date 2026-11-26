@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "title": "Registro de metadatos de proyectos",
+    "description": "Indexa tecnologías, nodos y permisos de herramientas y localiza espacios autorizados en el servidor."
+  },
+  "messages": {
+    "fieldText": "El campo {field} debe contener texto",
+    "invalidField": "Campo de catálogo no válido: {field}",
+    "fieldArray": "El campo {field} debe ser una lista",
+    "remote": "gitRemote debe ser un remoto Git de red",
+    "entry": "Cada entrada debe ser un objeto",
+    "absolute": "workspace debe ser una ruta absoluta del nodo",
+    "wildcard": "Para autorizar a todos, asigna a principals la cadena \"*\"",
+    "entries": "El catálogo de proyectos debe ser una lista",
+    "duplicate": "ID de proyecto duplicado: {id}",
+    "unavailable": "Proyecto no disponible",
+    "source": "Elige una fuente para el catálogo: projects o catalogFile"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "title": "Projektmetadaten-Verzeichnis",
+    "description": "Verzeichnet Technologie, Knoten und Werkzeugrechte von Projekten und ermittelt autorisierte Arbeitsbereiche auf dem Host."
+  },
+  "messages": {
+    "fieldText": "Katalogfeld {field} muss nichtleeren Text enthalten",
+    "invalidField": "Ungültiges Katalogfeld {field}",
+    "fieldArray": "Katalogfeld {field} muss eine Liste sein",
+    "remote": "gitRemote muss ein Git-Netzwerkziel sein",
+    "entry": "Ein Katalogeintrag muss ein Objekt sein",
+    "absolute": "workspace muss ein absoluter Pfad auf dem Knoten sein",
+    "wildcard": "Für allgemeinen Zugriff principals auf die Zeichenfolge \"*\" setzen",
+    "entries": "Der Projektkatalog muss eine Liste sein",
+    "duplicate": "Doppelte Projekt-ID: {id}",
+    "unavailable": "Projekt nicht verfügbar",
+    "source": "Nur eine Katalogquelle angeben: projects oder catalogFile"
+  }
+}

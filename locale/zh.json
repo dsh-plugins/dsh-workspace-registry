@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "title": "项目元数据注册表",
+    "description": "索引授权项目的技术栈、节点和工具权限，并在宿主解析工作区。",
+    "detail": "README.zh_CN.md"
+  },
+  "messages": {
+    "fieldText": "项目索引的 {field} 必须是非空文本",
+    "invalidField": "项目索引的 {field} 格式无效",
+    "fieldArray": "项目索引的 {field} 必须是数组",
+    "remote": "项目索引的 gitRemote 必须是网络 Git 远端",
+    "entry": "项目索引项必须是对象",
+    "absolute": "项目索引的 workspace 必须是节点上的绝对路径",
+    "wildcard": "向所有用户授权时请设置 principals 为字符串 \"*\"",
+    "entries": "项目索引必须是数组",
+    "duplicate": "项目 ID 重复：{id}",
+    "unavailable": "项目不可用",
+    "source": "项目索引只能配置一个来源：projects 或 catalogFile"
+  }
+}

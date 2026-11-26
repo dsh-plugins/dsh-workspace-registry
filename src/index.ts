@@ -1,3 +1,4 @@
+import { messages } from './messages.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { readFile } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
@@ -36,19 +37,19 @@ const identifier = /^[\p{L}\p{N}][\p{L}\p{N}_.-]*$/u
 
 function requiredText(value: unknown, field: string): string {
   if (typeof value !== 'string' || !value.trim() || /[\x00-\x1f\x7f]/.test(value)) {
-    throw new Error(`项目索引的 ${field} 必须是非空文本`)
+    throw new Error(messages.fieldText.replace('{field}', () => field))
   }
   return value
 }
 
 function key(value: unknown, field: string): string {
   const text = requiredText(value, field)
-  if (!identifier.test(text)) throw new Error(`项目索引的 ${field} 格式无效`)
+  if (!identifier.test(text)) throw new Error(messages.invalidField.replace('{field}', () => field))
   return text
 }
 
 function textList(value: unknown, field: string): string[] {
-  if (!Array.isArray(value)) throw new Error(`项目索引的 ${field} 必须是数组`)
+  if (!Array.isArray(value)) throw new Error(messages.fieldArray.replace('{field}', () => field))
   return [...new Set(value.map(item => requiredText(item, field)))]
 }
 
@@ -60,7 +61,7 @@ function publicRemote(value: unknown): string {
     ? URL.parse(`ssh://${scp[1]}/${scp[2]}`)
     : URL.parse(raw)
   if (!url || !['https:', 'http:', 'ssh:', 'git:'].includes(url.protocol) || !url.hostname) {
-    throw new Error('项目索引的 gitRemote 必须是网络 Git 远端')
+    throw new Error(messages.remote)
   }
   url.username = ''
   url.password = ''
@@ -70,17 +71,17 @@ function publicRemote(value: unknown): string {
 }
 
 function parseProject(raw: unknown): ProjectEntry {
-  if (typeof raw !== 'object' || !raw || Array.isArray(raw)) throw new Error('项目索引项必须是对象')
+  if (typeof raw !== 'object' || !raw || Array.isArray(raw)) throw new Error(messages.entry)
   const row = raw as Record<string, unknown>
   const workspace = requiredText(row.workspace, 'workspace')
   // Accept paths for other operating systems when reading a multi-node catalog.
   if (!posix.isAbsolute(workspace) &&
       !(win32.isAbsolute(workspace) && (/^[A-Za-z]:/.test(workspace) || workspace.startsWith('\\\\')))) {
-    throw new Error('项目索引的 workspace 必须是节点上的绝对路径')
+    throw new Error(messages.absolute)
   }
   const permissions = textList(row.permissions, 'permissions').map(tool => key(tool, 'permissions'))
   const principals = row.principals === '*' ? '*' : textList(row.principals, 'principals')
-  if (principals !== '*' && principals.includes('*')) throw new Error('向所有用户授权时请设置 principals 为字符串 "*"')
+  if (principals !== '*' && principals.includes('*')) throw new Error(messages.wildcard)
   return {
     id: key(row.id, 'id'),
     description: requiredText(row.description, 'description'),
@@ -113,10 +114,10 @@ export class ProjectRegistry {
   private readonly projects = new Map<string, ProjectEntry>()
 
   constructor(entries: readonly ProjectEntry[]) {
-    if (!Array.isArray(entries)) throw new Error('项目索引必须是数组')
+    if (!Array.isArray(entries)) throw new Error(messages.entries)
     for (const entry of entries) {
       const project = parseProject(entry)
-      if (this.projects.has(project.id)) throw new Error(`项目 ID 重复：${project.id}`)
+      if (this.projects.has(project.id)) throw new Error(messages.duplicate.replace('{id}', () => project.id))
       this.projects.set(project.id, project)
     }
   }
@@ -134,7 +135,7 @@ export class ProjectRegistry {
   /** Host-only. Inaccessible and missing IDs have the same public error. */
   resolve(owner: string, projectId: string): ResolvedProject {
     const project = this.projects.get(projectId)
-    if (!project || !visibleTo(project, owner)) throw new Error('项目不可用')
+    if (!project || !visibleTo(project, owner)) throw new Error(messages.unavailable)
     return { ...metadata(project), workspace: project.workspace }
   }
 }
@@ -143,7 +144,7 @@ export const name = 'dsh-workspace-registry'
 
 export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   if (config.catalogFile !== undefined && config.projects !== undefined) {
-    throw new Error('项目索引只能配置一个来源：projects 或 catalogFile')
+    throw new Error(messages.source)
   }
   const entries = config.catalogFile === undefined
     ? (config.projects === undefined ? [] : config.projects)

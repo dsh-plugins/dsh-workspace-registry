@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Workspace registry</title>
+  <desc id="desc">Three indexed cards with colored project tabs.</desc>
+  <defs><linearGradient id="ground" x2="1" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#214F42"/><stop offset="1" stop-color="#102E2B"/></linearGradient></defs>
+  <rect x="3" y="3" width="122" height="122" rx="27" fill="url(#ground)"/>
+  <g stroke-linejoin="round" stroke-linecap="round">
+  <path fill="#3C796D" d="M25 43h82v54H25z"/><path fill="#6FBAA0" d="M22 35h78v52H22z"/>
+  <path fill="#C7EEDD" d="M23 28h36l8 9h30v44H23z"/>
+  <path stroke="#276250" stroke-width="5" d="M38 53h41m-41 13h24"/>
+  <path fill="#F4BF77" d="M94 43h13v14H94z"/><path fill="#AA9DDF" d="M94 63h13v14H94z"/>
+  </g>
+</svg>

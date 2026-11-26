@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "title": "Registre des métadonnées des projets",
+    "description": "Indexe les technologies, les nœuds et les droits des outils et localise les espaces autorisés sur l’hôte."
+  },
+  "messages": {
+    "fieldText": "Le champ {field} doit contenir du texte",
+    "invalidField": "Champ de catalogue non valide : {field}",
+    "fieldArray": "Le champ {field} doit être une liste",
+    "remote": "gitRemote doit être un dépôt Git distant accessible sur le réseau",
+    "entry": "Une entrée du catalogue doit être un objet",
+    "absolute": "workspace doit être un chemin absolu sur le nœud",
+    "wildcard": "Pour autoriser tout le monde, définissez principals sur la chaîne \"*\"",
+    "entries": "Le catalogue de projets doit être une liste",
+    "duplicate": "Identifiant de projet en double : {id}",
+    "unavailable": "Projet indisponible",
+    "source": "Choisissez une source pour le catalogue : projects ou catalogFile"
+  }
+}

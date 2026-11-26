@@ -1,30 +1,49 @@
-# @dsh-prism/dsh-workspace-registry
+<div align="center">
 
-棱镜的项目元数据索引。L1 的查询工具只接收当前对话所有者有权访问的项目，包括 ID、简介、技术栈、节点 ID、Git 远端和执行工具权限。工作区绝对路径仅由宿主派发时解析。
+<img src="icon.svg" width="256" height="256" alt="dsh-workspace-registry icon">
 
-## 配置
+# dsh-workspace-registry
 
-在 Cordis 插件配置中填写 `projects`，或设置 `catalogFile` 指向内容为相同项目数组的 UTF-8 JSON 文件。索引在插件启动时校验和加载。修改索引后重新加载插件。
+**Register a project once so Prism can find the right codebase when a user describes a task.**
 
-```yaml
-projects:
-  - id: mobile
-    description: 客户端应用与组件库
-    stack: [TypeScript, React]
-    nodeId: laptop
-    workspace: /srv/projects/mobile
-    gitRemote: https://git.example.org/team/mobile.git
-    principals: '*'
-    permissions: [read, edit, write]
+English | [简体中文](README.zh_CN.md)
+
+</div>
+
+## Set up Prism
+
+Use Node.js 24.9 or later, npm, Git and credentials with read access to the five private plugin repositories. The checkout script places matching plugins and launcher files in a local `runtime/` directory. Run subsequent installation, configuration and launch commands there. The public guide is available without signing in. To use the example models, configure your DeepSeek credentials in DSH or set the `DEEPSEEK_API_KEY` environment variable. [Installation guide](https://prism.dsh-plug.in/)
+
+```sh
+git clone https://github.com/dsh-plugins/dsh-prism.git
+cd dsh-prism
+node scripts/checkout.mjs
+cd runtime
+npm ci
+npm run build
+npm start
 ```
 
-`workspace` 使用目标节点的绝对路径。支持 POSIX 和 Windows。项目 ID 在索引内唯一。`gitRemote` 可省略；支持网络 Git URL 和 SCP 风格地址。查询结果会移除登录信息、查询参数和片段。
+## Make a project discoverable
 
-`principals` 支持字符串 `'*'` 或所有者标识数组。空数组对所有人隐藏项目。每次查询与派发均检查相同授权。`permissions` 是 DSH 原生工具名列表，空数组表示不授予原生工具。编排器同时应用层级与父任务的权限上限。
+Copy `prism.example.json` to `prism.config.json` in your local `runtime/` directory. Add an entry to `registry.projects`. Choose a stable ID and describe what the project contains in the terms your users use. Set `workspace` to its directory and `nodeId` to the ID of the device that holds it.
 
-## 宿主接口
+```json
+{
+  "id": "mobile",
+  "description": "Mobile client and shared UI components",
+  "stack": ["TypeScript", "React"],
+  "nodeId": "local",
+  "workspace": "/srv/projects/mobile",
+  "principals": ["web:owner"],
+  "permissions": ["read", "glob", "grep"]
+}
+```
 
-- `ctx.prismRegistry.query(owner, search?)` 返回授权的元数据副本，可按项目、简介、技术栈、节点及 Git 远端检索。
-- `ctx.prismRegistry.resolve(owner, id)` 返回含 `workspace` 的宿主记录。不可见和不存在的项目均抛出“项目不可用”。
+This example lets the Web owner search and read the mobile project. Choose the actual project path, owner and tool permissions for your deployment. Set `orchestrator.defaultProjectId` to a project that the conversation owner can access. Restart with your configuration, then try “Find the mobile client and check where the login screen is implemented.”
 
-`owner` 由编排器从经过认证的对话绑定取得。L1 工具只暴露查询，由编排器代入所有者。
+```sh
+npm start -- prism.config.json --host 127.0.0.1 --port 3080 --no-open
+```
+
+[Prism documentation](https://prism.dsh-plug.in/) · [Technical reference](docs/TECH.md)

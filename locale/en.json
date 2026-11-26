@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "title": "Project metadata registry",
+    "description": "Index project stacks, nodes and tool permissions; resolve authorized workspaces on the host.",
+    "detail": "README.md"
+  },
+  "messages": {
+    "fieldText": "Catalog field {field} must be nonempty text",
+    "invalidField": "Invalid catalog field {field}",
+    "fieldArray": "Catalog field {field} must be an array",
+    "remote": "gitRemote must be a network Git remote",
+    "entry": "A catalog entry must be an object",
+    "absolute": "workspace must be an absolute path on its node",
+    "wildcard": "For access by all users set principals to the string \"*\"",
+    "entries": "The project catalog must be an array",
+    "duplicate": "Duplicate project ID: {id}",
+    "unavailable": "Project unavailable",
+    "source": "Configure one catalog source: projects or catalogFile"
+  }
+}
