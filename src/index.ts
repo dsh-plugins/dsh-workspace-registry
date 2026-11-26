@@ -1,5 +1,6 @@
 import { messages } from './messages.js'
-import type { Context } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import { readFile } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 
@@ -25,6 +26,7 @@ export interface ProjectEntry extends ResolvedProject {
 export interface Config {
   projects?: ProjectEntry[]
   catalogFile?: string
+  managedProjects?: Volatile<ProjectEntry[]>
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -34,6 +36,22 @@ declare module '@deepseek-ai/cordis' {
 }
 
 const identifier = /^[\p{L}\p{N}][\p{L}\p{N}_.-]*$/u
+
+// Existing operator-defined entries remain private to the host. Only the new
+// editable list is projected through the native DSH settings service.
+const text = z.string().pattern(/^[^\x00-\x1f\x7f]+$/u).required()
+const id = z.string().pattern(identifier).required()
+const path = z.string().pattern(/^(?:\/|[a-z]:[\\/]|\\\\)[^\x00-\x1f\x7f]*$/iu).required()
+export const Config = z.object({
+  projects: z.any(),
+  catalogFile: z.string(),
+  managedProjects: z.array(z.object({
+    id, description: text, workspace: path, nodeId: id,
+    stack: z.array(text),
+    principals: z.array(text).required(),
+    permissions: z.array(id),
+  })).default([]).volatile(),
+})
 
 function requiredText(value: unknown, field: string): string {
   if (typeof value !== 'string' || !value.trim() || /[\x00-\x1f\x7f]/.test(value)) {
@@ -110,19 +128,40 @@ function metadata(project: ProjectEntry): ProjectMetadata {
   }
 }
 
-export class ProjectRegistry {
-  private readonly projects = new Map<string, ProjectEntry>()
+function indexProjects(entries: readonly unknown[], index = new Map<string, ProjectEntry>()) {
+  for (const entry of entries) {
+    const project = parseProject(entry)
+    if (index.has(project.id)) throw new Error(messages.duplicate.replace('{id}', () => project.id))
+    index.set(project.id, project)
+  }
+  return index
+}
 
-  constructor(entries: readonly ProjectEntry[]) {
+export class ProjectRegistry {
+  private readonly staticEntries: Map<string, ProjectEntry>
+  private projects: Map<string, ProjectEntry>
+  private lastManaged?: readonly unknown[]
+
+  constructor(entries: readonly ProjectEntry[], private readonly managed?: Volatile<ProjectEntry[]>) {
     if (!Array.isArray(entries)) throw new Error(messages.entries)
-    for (const entry of entries) {
-      const project = parseProject(entry)
-      if (this.projects.has(project.id)) throw new Error(messages.duplicate.replace('{id}', () => project.id))
-      this.projects.set(project.id, project)
+    this.staticEntries = indexProjects(entries)
+    this.projects = this.staticEntries
+    this.refresh()
+  }
+
+  private refresh() {
+    const current = this.managed?.get()
+    if (current && current !== this.lastManaged) {
+      // An older saved overlay can contain an ID now reserved by the host catalog.
+      // Keep the host grant and continue serving the other user-managed projects.
+      const additions = current.filter(entry => !this.staticEntries.has(entry?.id))
+      this.projects = indexProjects(additions, new Map(this.staticEntries))
+      this.lastManaged = current
     }
   }
 
   query(owner: string, search = ''): ProjectMetadata[] {
+    this.refresh()
     const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
     return [...this.projects.values()].filter(project => {
       if (!visibleTo(project, owner)) return false
@@ -134,6 +173,7 @@ export class ProjectRegistry {
 
   /** Host-only. Inaccessible and missing IDs have the same public error. */
   resolve(owner: string, projectId: string): ResolvedProject {
+    this.refresh()
     const project = this.projects.get(projectId)
     if (!project || !visibleTo(project, owner)) throw new Error(messages.unavailable)
     return { ...metadata(project), workspace: project.workspace }
@@ -149,5 +189,23 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   const entries = config.catalogFile === undefined
     ? (config.projects === undefined ? [] : config.projects)
     : JSON.parse(await readFile(requiredText(config.catalogFile, 'catalogFile'), 'utf8'))
-  ctx.provide('prismRegistry', new ProjectRegistry(entries))
+  const registry = new ProjectRegistry(entries, config.managedProjects)
+  ctx.on('internal/config', (fiber, next) => {
+    const raw = next()
+    if (fiber !== ctx.fiber) return raw
+    // The native settings editor resolves the candidate before writing the profile.
+    const candidate: Config = Config(raw)
+    const managed = candidate.managedProjects?.get() ?? []
+    if (managed.length) {
+      const fixed: ProjectEntry[] = candidate.catalogFile === undefined ? candidate.projects ?? []
+        : candidate.catalogFile === config.catalogFile ? entries : []
+      const reserved = indexProjects(fixed)
+      const existing = new Set(config.managedProjects?.get().map(project => project.id))
+      // Existing shadowed rows can be removed one at a time in the editor.
+      const additions = managed.filter(project => !reserved.has(project.id) || !existing.has(project.id))
+      indexProjects(additions, reserved)
+    }
+    return raw
+  })
+  ctx.provide('prismRegistry', registry)
 }

@@ -1,0 +1,4 @@
+- insert:
+    - id: dsh-workspace-registry
+      name: '@dsh-prism/dsh-workspace-registry'
+      config: {}

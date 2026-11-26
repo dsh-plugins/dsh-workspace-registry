@@ -79,3 +79,37 @@ test('Cordis service serves a persistent catalog snapshot after reload', async t
   assert.deepEqual(next.prismRegistry.query('alice'), [])
   await assert.rejects(apply(new Context(), { catalogFile: file, projects: [] }))
 })
+
+test('native settings changes authorize and revoke projects on the live registry', () => {
+  let rows = [project({ principals: ['web:owner'], gitRemote: undefined })]
+  const registry = new ProjectRegistry([], { get: () => rows })
+  assert.deepEqual(registry.query('web:owner').map(p => p.id), ['mobile'])
+  assert.deepEqual(registry.query('other'), [])
+  rows = [project({ id: 'backend', workspace: '/srv/backend', principals: ['web:owner'] })]
+  assert.throws(() => registry.resolve('web:owner', 'mobile'))
+  assert.equal(registry.resolve('web:owner', 'backend').workspace, '/srv/backend')
+  rows = []
+  assert.deepEqual(registry.query('web:owner'), [])
+})
+
+test('a saved managed ID collision preserves the host grant and unrelated live projects', () => {
+  const fixed = project({ id: 'mobile', principals: ['alice'], permissions: ['read'] })
+  const duplicate = project({ id: 'mobile', workspace: '/other/mobile', principals: ['bob'], permissions: ['write'] })
+  let rows = [duplicate, project({ id: 'backend', principals: ['bob'] })]
+  const registry = new ProjectRegistry([fixed], { get: () => rows })
+  assert.equal(registry.resolve('alice', 'mobile').workspace, fixed.workspace)
+  assert.deepEqual(registry.resolve('alice', 'mobile').permissions, ['read'])
+  assert.throws(() => registry.resolve('bob', 'mobile'))
+  assert.deepEqual(registry.query('bob').map(p => p.id), ['backend'])
+  rows = [project({ id: 'docs', principals: ['bob'] })]
+  assert.deepEqual(registry.query('bob').map(p => p.id), ['docs'])
+})
+
+test('the DSH settings preflight rejects a new managed ID collision before persistence', async () => {
+  const ctx = new Context()
+  const { gitRemote: _remote, ...fixed } = project()
+  await apply(ctx, { projects: [fixed] })
+  assert.throws(() => ctx.fiber.resolveConfig({ projects: [fixed], managedProjects: [fixed] }), /mobile/)
+  assert.doesNotThrow(() => ctx.fiber.resolveConfig({ projects: [fixed], managedProjects: [{ ...fixed, id: 'backend' }] }))
+  assert.deepEqual(ctx.prismRegistry.query('alice').map(p => p.id), ['mobile'])
+})
