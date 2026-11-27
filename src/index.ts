@@ -227,7 +227,8 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
     : JSON.parse(await readFile(requiredText(config.catalogFile, 'catalogFile'), 'utf8'))
 
   let native: NativeWorkspaceCatalog | undefined
-  if (config.useHostWorkspaces) {
+  const useHostWorkspaces = config.useHostWorkspaces ?? (config.projects === undefined && config.catalogFile === undefined)
+  if (useHostWorkspaces) {
     ctx.inject(['workspaceRegistry', 'dshMesh'], scope => {
       const workspaces = scope.get('workspaceRegistry', true) as Pick<NativeWorkspaceCatalog, 'list'>
       const { nodeId } = scope.get('dshMesh', true) as Pick<NativeWorkspaceCatalog, 'nodeId'>

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { messages } from './messages.js'
-import { apply, ProjectRegistry, type ProjectEntry } from './index.js'
+import { apply, Config, ProjectRegistry, type ProjectEntry } from './index.js'
 
 function project(overrides: Partial<ProjectEntry> = {}): ProjectEntry {
   return {
@@ -110,4 +110,22 @@ test('DSH workspace snapshots expose live names and retain explicit project boun
   workspaces = []
   assert.deepEqual(registry.query(owner), [])
   assert.throws(() => registry.resolve(owner, native.id), { message: messages.unavailable })
+})
+
+test('a legacy profile override keeps native discovery unless a project source or opt-out is configured', async () => {
+  const workspace = { id: 'native', title: 'DSH Workspace', path: '/fixtures/workspace' }
+  const legacy = { managedProjects: [project({ principals: ['web:owner'] })] }
+  const cases = [
+    { raw: legacy, expected: [workspace.id] },
+    { raw: { ...legacy, useHostWorkspaces: false }, expected: [] },
+    { raw: { projects: [] }, expected: [] },
+    { raw: { projects: [], useHostWorkspaces: true }, expected: [workspace.id] },
+  ]
+  for (const { raw, expected } of cases) {
+    const ctx = new Context()
+    ctx.provide('dshMesh', { nodeId: 'local' })
+    ctx.provide('workspaceRegistry', { list: () => [workspace] })
+    await apply(ctx, Config(raw))
+    assert.deepEqual(ctx.prismRegistry.query('web:owner').map(entry => entry.id), expected)
+  }
 })
