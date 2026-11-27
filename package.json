@@ -2,6 +2,7 @@
   "name": "@dsh-prism/dsh-workspace-registry",
   "description": "Register project folders, tool permissions and worker nodes so Prism can find the right workspace for a task.",
   "version": "0.1.2",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
