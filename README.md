@@ -10,7 +10,11 @@ English | [简体中文](README.zh_CN.md)
 
 </div>
 
-## Set up Prism
+## Use Prism in the DSH web app
+
+Prism discovers the local workspaces registered in DSH. Add, rename or delete a workspace in DSH to update Prism’s project list. The web owner and approved messaging identities can use the default read and search tools in these workspaces.
+
+## Run the standalone host
 
 Use Node.js 24.9 or later, npm, Git and credentials with read access to the five private plugin repositories. The checkout script places matching plugins and launcher files in a local `runtime/` directory. Run subsequent installation, configuration and launch commands there. The public guide is available without signing in. To use the example models, configure your DeepSeek credentials in DSH or set the `DEEPSEEK_API_KEY` environment variable. [Installation guide](https://prism.dsh-plug.in/)
 
@@ -24,7 +28,7 @@ npm run build
 npm start
 ```
 
-## Make a project discoverable
+## Configure projects for a standalone or Mesh host
 
 Copy `prism.example.json` to `prism.config.json` in your local `runtime/` directory. Add an entry to `registry.projects`. Choose a stable ID and describe what the project contains in the terms your users use. Set `workspace` to its directory and `nodeId` to the ID of the device that holds it.
 

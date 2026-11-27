@@ -1,8 +1,9 @@
 import { messages } from './messages.js'
 import z from '@deepseek-ai/schemastery'
-import type { Context, Volatile } from '@deepseek-ai/cordis'
+import type { Context } from '@deepseek-ai/cordis'
+import { realpathSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { posix, win32 } from 'node:path'
+import { normalize, posix, win32 } from 'node:path'
 
 /** Fields the project's operators have made available to an authorized L1. */
 export interface ProjectMetadata {
@@ -17,16 +18,29 @@ export interface ProjectMetadata {
 /** A workspace path is only meaningful on its assigned node. */
 export interface ResolvedProject extends ProjectMetadata {
   workspace: string
+  workspaceId?: string
 }
 
 export interface ProjectEntry extends ResolvedProject {
   principals: '*' | string[]
 }
 
+/** 明确启用 DSH 工作区发现，独立宿主继续读取配置目录。 */
 export interface Config {
   projects?: ProjectEntry[]
   catalogFile?: string
-  managedProjects?: Volatile<ProjectEntry[]>
+  useHostWorkspaces?: boolean
+}
+
+interface NativeWorkspace {
+  id: string
+  path: string
+  title: string
+}
+
+interface NativeWorkspaceCatalog {
+  nodeId: string
+  list(): readonly NativeWorkspace[]
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -37,20 +51,12 @@ declare module '@deepseek-ai/cordis' {
 
 const identifier = /^[\p{L}\p{N}][\p{L}\p{N}_.-]*$/u
 
-// Existing operator-defined entries remain private to the host. Only the new
-// editable list is projected through the native DSH settings service.
-const text = z.string().pattern(/^[^\x00-\x1f\x7f]+$/u).required()
-const id = z.string().pattern(identifier).required()
-const path = z.string().pattern(/^(?:\/|[a-z]:[\\/]|\\\\)[^\x00-\x1f\x7f]*$/iu).required()
+const nativeTools = ['read', 'glob', 'grep']
+
 export const Config = z.object({
   projects: z.any(),
   catalogFile: z.string(),
-  managedProjects: z.array(z.object({
-    id, description: text, workspace: path, nodeId: id,
-    stack: z.array(text),
-    principals: z.array(text).required(),
-    permissions: z.array(id),
-  })).default([]).volatile(),
+  useHostWorkspaces: z.boolean(),
 })
 
 function requiredText(value: unknown, field: string): string {
@@ -117,7 +123,7 @@ function visibleTo(project: ProjectEntry, owner: string): boolean {
     (project.principals === '*' || project.principals.includes(owner))
 }
 
-function metadata(project: ProjectEntry): ProjectMetadata {
+function metadata(project: ResolvedProject): ProjectMetadata {
   return {
     id: project.id,
     description: project.description,
@@ -128,7 +134,8 @@ function metadata(project: ProjectEntry): ProjectMetadata {
   }
 }
 
-function indexProjects(entries: readonly unknown[], index = new Map<string, ProjectEntry>()) {
+function indexProjects(entries: readonly unknown[]) {
+  const index = new Map<string, ProjectEntry>()
   for (const entry of entries) {
     const project = parseProject(entry)
     if (index.has(project.id)) throw new Error(messages.duplicate.replace('{id}', () => project.id))
@@ -137,46 +144,75 @@ function indexProjects(entries: readonly unknown[], index = new Map<string, Proj
   return index
 }
 
-export class ProjectRegistry {
-  private readonly staticEntries: Map<string, ProjectEntry>
-  private projects: Map<string, ProjectEntry>
-  private lastManaged?: readonly unknown[]
+function localWorkspacePath(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT' || code === 'ENOTDIR' || code === 'EACCES' || code === 'EPERM') {
+      return normalize(path)
+    }
+    throw error
+  }
+}
 
-  constructor(entries: readonly ProjectEntry[], private readonly managed?: Volatile<ProjectEntry[]>) {
-    if (!Array.isArray(entries)) throw new Error(messages.entries)
-    this.staticEntries = indexProjects(entries)
-    this.projects = this.staticEntries
-    this.refresh()
+/** 合并显式项目条目与宿主提供的本地工作区，按会话身份限制访问。 */
+export class ProjectRegistry {
+  private readonly projects: Map<string, ProjectEntry>
+
+  constructor(entries: readonly ProjectEntry[], private readonly native?: () => NativeWorkspaceCatalog | undefined) {
+    if (!Array.isArray(entries)) {
+      throw new Error(messages.entries)
+    }
+    this.projects = indexProjects(entries)
   }
 
-  private refresh() {
-    const current = this.managed?.get()
-    if (current && current !== this.lastManaged) {
-      // An older saved overlay can contain an ID now reserved by the host catalog.
-      // Keep the host grant and continue serving the other user-managed projects.
-      const additions = current.filter(entry => !this.staticEntries.has(entry?.id))
-      this.projects = indexProjects(additions, new Map(this.staticEntries))
-      this.lastManaged = current
+  private hostProjects(owner: string): ResolvedProject[] {
+    const native = this.native?.()
+    if (!native || (owner !== 'web:owner' && !owner.startsWith('im:'))) {
+      return []
     }
+
+    // 显式项目的权限同样约束已附加到 DSH 的路径，避免工作区发现绕过授权。
+    const configuredPaths = new Set([...this.projects.values()]
+      .filter(project => project.nodeId === native.nodeId)
+      .map(project => localWorkspacePath(project.workspace)))
+    return native.list()
+      .filter(workspace => !this.projects.has(workspace.id) && !configuredPaths.has(workspace.path))
+      .map(workspace => ({
+        id: workspace.id,
+        description: workspace.title.trim() || workspace.id,
+        stack: [],
+        nodeId: native.nodeId,
+        permissions: [...nativeTools],
+        workspace: workspace.path,
+        workspaceId: workspace.id,
+      }))
   }
 
   query(owner: string, search = ''): ProjectMetadata[] {
-    this.refresh()
     const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
-    return [...this.projects.values()].filter(project => {
-      if (!visibleTo(project, owner)) return false
+    const configured = [...this.projects.values()].filter(project => visibleTo(project, owner))
+    return [...configured, ...this.hostProjects(owner)].filter(project => {
       const fields = [project.id, project.description, ...project.stack, project.nodeId, project.gitRemote ?? '']
       const text = fields.join(' ').toLowerCase()
       return terms.every(term => text.includes(term))
     }).map(metadata)
   }
 
-  /** Host-only. Inaccessible and missing IDs have the same public error. */
-  resolve(owner: string, projectId: string): ResolvedProject {
-    this.refresh()
-    const project = this.projects.get(projectId)
-    if (!project || !visibleTo(project, owner)) throw new Error(messages.unavailable)
-    return { ...metadata(project), workspace: project.workspace }
+  /** 按当前身份解析派发路径，Mesh 仅接受显式项目。 */
+  resolve(owner: string, projectId: string, source?: 'configured'): ResolvedProject {
+    const configured = this.projects.get(projectId)
+    if (configured && visibleTo(configured, owner)) {
+      return { ...metadata(configured), workspace: configured.workspace }
+    }
+    if (!configured && source !== 'configured') {
+      const workspace = this.hostProjects(owner).find(project => project.id === projectId)
+      if (workspace) {
+        return workspace
+      }
+    }
+    throw new Error(messages.unavailable)
   }
 }
 
@@ -189,23 +225,15 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
   const entries = config.catalogFile === undefined
     ? (config.projects === undefined ? [] : config.projects)
     : JSON.parse(await readFile(requiredText(config.catalogFile, 'catalogFile'), 'utf8'))
-  const registry = new ProjectRegistry(entries, config.managedProjects)
-  ctx.on('internal/config', (fiber, next) => {
-    const raw = next()
-    if (fiber !== ctx.fiber) return raw
-    // The native settings editor resolves the candidate before writing the profile.
-    const candidate: Config = Config(raw)
-    const managed = candidate.managedProjects?.get() ?? []
-    if (managed.length) {
-      const fixed: ProjectEntry[] = candidate.catalogFile === undefined ? candidate.projects ?? []
-        : candidate.catalogFile === config.catalogFile ? entries : []
-      const reserved = indexProjects(fixed)
-      const existing = new Set(config.managedProjects?.get().map(project => project.id))
-      // Existing shadowed rows can be removed one at a time in the editor.
-      const additions = managed.filter(project => !reserved.has(project.id) || !existing.has(project.id))
-      indexProjects(additions, reserved)
-    }
-    return raw
-  })
-  ctx.provide('prismRegistry', registry)
+
+  let native: NativeWorkspaceCatalog | undefined
+  if (config.useHostWorkspaces) {
+    ctx.inject(['workspaceRegistry', 'dshMesh'], scope => {
+      const workspaces = scope.get('workspaceRegistry', true) as Pick<NativeWorkspaceCatalog, 'list'>
+      const { nodeId } = scope.get('dshMesh', true) as Pick<NativeWorkspaceCatalog, 'nodeId'>
+      native = { nodeId, list: () => workspaces.list() }
+      return () => { native = undefined }
+    })
+  }
+  ctx.provide('prismRegistry', new ProjectRegistry(entries, () => native))
 }

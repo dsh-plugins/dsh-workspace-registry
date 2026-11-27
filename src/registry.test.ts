@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
@@ -80,36 +80,34 @@ test('Cordis service serves a persistent catalog snapshot after reload', async t
   await assert.rejects(apply(new Context(), { catalogFile: file, projects: [] }))
 })
 
-test('native settings changes authorize and revoke projects on the live registry', () => {
-  let rows = [project({ principals: ['web:owner'], gitRemote: undefined })]
-  const registry = new ProjectRegistry([], { get: () => rows })
-  assert.deepEqual(registry.query('web:owner').map(p => p.id), ['mobile'])
-  assert.deepEqual(registry.query('other'), [])
-  rows = [project({ id: 'backend', workspace: '/srv/backend', principals: ['web:owner'] })]
-  assert.throws(() => registry.resolve('web:owner', 'mobile'))
-  assert.equal(registry.resolve('web:owner', 'backend').workspace, '/srv/backend')
-  rows = []
-  assert.deepEqual(registry.query('web:owner'), [])
-})
+test('DSH workspace snapshots expose live names and retain explicit project boundaries', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'prism-registry-'))
+  t.after(() => rm(dir, { recursive: true, force: true }))
+  const reservedPath = await realpath(dir)
+  const native = { id: 'native-1', path: join(dir, 'native'), title: 'Workspace One' }
+  const reserved = { id: 'native-2', path: reservedPath, title: 'Restricted Workspace' }
+  let workspaces = [native, reserved]
+  const registry = new ProjectRegistry([
+    project({ id: 'restricted', workspace: reservedPath, principals: ['alice'] }),
+  ], () => ({ nodeId: 'laptop', list: () => workspaces }))
+  const owner = 'web:owner'
+  const im = 'im:' + JSON.stringify(['telegram', 'chat', 'user'])
 
-test('a saved managed ID collision preserves the host grant and unrelated live projects', () => {
-  const fixed = project({ id: 'mobile', principals: ['alice'], permissions: ['read'] })
-  const duplicate = project({ id: 'mobile', workspace: '/other/mobile', principals: ['bob'], permissions: ['write'] })
-  let rows = [duplicate, project({ id: 'backend', principals: ['bob'] })]
-  const registry = new ProjectRegistry([fixed], { get: () => rows })
-  assert.equal(registry.resolve('alice', 'mobile').workspace, fixed.workspace)
-  assert.deepEqual(registry.resolve('alice', 'mobile').permissions, ['read'])
-  assert.throws(() => registry.resolve('bob', 'mobile'))
-  assert.deepEqual(registry.query('bob').map(p => p.id), ['backend'])
-  rows = [project({ id: 'docs', principals: ['bob'] })]
-  assert.deepEqual(registry.query('bob').map(p => p.id), ['docs'])
-})
+  assert.deepEqual(registry.query(owner, 'workspace one'), [{
+    id: native.id, description: native.title, nodeId: 'laptop', stack: [], permissions: ['read', 'glob', 'grep'],
+  }])
+  assert.deepEqual(registry.query(im).map(project => project.id), [native.id])
+  assert.deepEqual(registry.query('alice').map(project => project.id), ['restricted'])
+  assert.deepEqual(registry.query(''), [])
+  assert.equal(registry.resolve(owner, native.id).workspaceId, native.id)
+  assert.equal(registry.resolve(owner, native.id).workspace, native.path)
+  assert.throws(() => registry.resolve(owner, reserved.id), { message: messages.unavailable })
+  assert.throws(() => registry.resolve(owner, native.id, 'configured'), { message: messages.unavailable })
+  assert.equal(registry.resolve('alice', 'restricted', 'configured').workspace, reservedPath)
 
-test('the DSH settings preflight rejects a new managed ID collision before persistence', async () => {
-  const ctx = new Context()
-  const { gitRemote: _remote, ...fixed } = project()
-  await apply(ctx, { projects: [fixed] })
-  assert.throws(() => ctx.fiber.resolveConfig({ projects: [fixed], managedProjects: [fixed] }), /mobile/)
-  assert.doesNotThrow(() => ctx.fiber.resolveConfig({ projects: [fixed], managedProjects: [{ ...fixed, id: 'backend' }] }))
-  assert.deepEqual(ctx.prismRegistry.query('alice').map(p => p.id), ['mobile'])
+  workspaces = [{ ...native, title: 'Renamed Workspace' }]
+  assert.equal(registry.query(owner)[0].description, 'Renamed Workspace')
+  workspaces = []
+  assert.deepEqual(registry.query(owner), [])
+  assert.throws(() => registry.resolve(owner, native.id), { message: messages.unavailable })
 })

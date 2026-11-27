@@ -10,7 +10,11 @@
 
 </div>
 
-## 接入棱镜
+## 在 DSH 网页端使用
+
+从 DSH 安装棱镜插件后，棱镜会读取 DSH 已登记的本机工作区。添加、重命名或删除工作区后，棱镜会随之更新。网页所有者和获准使用棱镜的即时通讯身份可以在这些工作区中使用默认的读取和搜索工具。
+
+## 启动独立宿主
 
 需要 Node.js 24.9 或更高版本、npm、Git，以及对五个私有插件仓库的 Git 读取权限。检出脚本把匹配的插件和启动文件放入本机的 `runtime/` 目录，后续安装、配置和运行命令均在该目录执行。公开使用指南可直接阅读。需要调用示例模型时，请先在 DSH 凭据存储中配置 DeepSeek 凭据，或设置环境变量 `DEEPSEEK_API_KEY`。[安装指南](https://prism.dsh-plug.in/zh/)
 
@@ -24,7 +28,7 @@ npm run build
 npm start
 ```
 
-## 让项目可被找到
+## 配置独立宿主和 Mesh 的项目
 
 在本机的 `runtime/` 中将 `prism.example.json` 复制为 `prism.config.json`，在 `registry.projects` 中增加一项。选择稳定的 ID，用用户熟悉的名称描述项目用途。将 `workspace` 指向项目目录，将 `nodeId` 设为存放项目的设备 ID。
 
